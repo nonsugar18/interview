@@ -1,11 +1,18 @@
 <template>
   <q-page class="row q-pt-xl">
     <div class="full-width q-px-xl">
-      <div class="q-mb-xl">
-        <q-input v-model="tempData.name" label="姓名" />
-        <q-input v-model="tempData.age" label="年齡" />
-        <q-btn color="primary" class="q-mt-md">新增</q-btn>
-      </div>
+      <q-form ref="formRef" class="q-mb-xl">
+        <q-input v-model="tempData.name" label="姓名"
+                 :rules="[val => !!val || '姓名不可為空']"
+                 lazy-rules/>
+        <q-input v-model="tempData.age" label="年齡"
+                 type="number"
+                 :rules="[val => !!val || '年齡不可為空', val => val > 0 || '年齡必須大於 0']"
+                 lazy-rules/>
+        <q-btn color="primary" class="q-mt-md"
+               :label="isEditing ? '修改' : '新增'"
+               @click="addData(tempData.name, tempData.age)"></q-btn>
+      </q-form>
 
       <q-table
         flat
@@ -90,6 +97,7 @@ const blockData = ref([
   {
     name: 'test',
     age: 25,
+    id: 0,
   },
 ]);
 const tableConfig = ref([
@@ -123,8 +131,85 @@ const tempData = ref({
   name: '',
   age: '',
 });
-function handleClickOption(btn, data) {
-  // ...
+
+const formRef = ref(null);
+const isEditing = ref(false);
+
+async function handleClickOption(btn, data) {
+  if (btn.status === 'edit') {
+    isEditing.value = true;
+    tempData.value.name = data.name;
+    tempData.value.age = data.age;
+  } else if (btn.status === 'delete') {
+    if (confirm(`確定要刪除 ${data.name} 嗎？`)) {
+      //blockData.value = blockData.value.filter((row) => row.id !== data.id);
+      try {
+        const response = await axios.delete(`https://dahua.metcfire.com.tw/api/CRUDTest/${data.id}`);
+
+        if (response.status === 204) {
+          blockData.value = blockData.value.filter((row) => row.id !== data.id);
+          alert('刪除成功');
+        } else {
+          alert('刪除失敗，請稍後再試');
+        }
+      } catch (error) {
+        console.error('刪除失敗:', error);
+        alert('刪除失敗，請稍後重試');
+      }
+    }
+    }
+}
+async function addData(name: string, age: number) {
+  if (!formRef.value) return;
+
+  const isValid = await formRef.value.validate();
+  if (!isValid) {
+    console.error('表單驗證失敗');
+    return;
+  }
+  try {
+    if (isEditing.value) {
+      const response = await axios.patch('https://dahua.metcfire.com.tw/api/CRUDTest', {
+        name,
+        age,
+      });
+      if (response) {
+        const updatedRowIndex = blockData.value.findIndex((item) => item.name === tempData.value.name);
+        blockData.value[updatedRowIndex] = {
+          id: blockData.value[updatedRowIndex].id, // 保持原有 ID
+          name,
+          age,
+        };
+      }
+      isEditing.value = false;
+    }
+    else{
+      const response = await axios.post('https://dahua.metcfire.com.tw/api/CRUDTest', {
+        name,
+        age: Number(age),
+      });
+
+      if(response)
+      {
+        blockData.value = [
+          ...blockData.value,
+          {
+            id:  blockData.value.length + 1,
+            name: tempData.value.name,
+            age: tempData.value.age,
+          },
+        ];
+      }
+    }
+
+    tempData.value.name = '';
+    tempData.value.age = '';
+
+    formRef.value.resetValidation();
+  } catch (error) {
+    console.error('新增失敗:', error);
+    alert('新增失敗，請稍後重試');
+  }
 }
 </script>
 
